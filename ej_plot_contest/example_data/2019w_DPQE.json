@@ -1,0 +1,12 @@
+{
+"department":"DPQE",
+"login_prefix":"ed950",
+"login_group_len":3,
+"problems":"C- Cmem- D- F- E- E_mem-",
+"preps":{
+        "705":"Хохлов",
+        "702":"Дивари",
+        "806":"Чуканова",
+        "319":"Утробина"
+    }
+}
