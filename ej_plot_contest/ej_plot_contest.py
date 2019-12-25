@@ -341,6 +341,8 @@ if __name__ == '__main__':
                         default=".")
     parser.add_argument("--delimiter", help="delimiter in csv file, default ;",
                         default=";")
+    parser.add_argument("--text_only", help="prevent prot data, use if no matplotlib",
+                        default=False, action="store_true")
 
     args = parser.parse_args()
     
@@ -375,8 +377,6 @@ if __name__ == '__main__':
     data = Data(cfg, file, args.delimiter)
     data.print_table()
 
-    #runs = get_data(file)
-    #table, group_numbers = fiter_data(runs, prefix=login_prefix, group_name_len=login_group_len, filter=filter, counted_status='OK')
-    # оставляем только те названия задач, что реально существуют и интересны нам
-    #headers = get_counted_probs(table, filter)
-    #print_table(table, group_numbers, headers)
+    if not args.text_only:
+        print("Plot data")
+
