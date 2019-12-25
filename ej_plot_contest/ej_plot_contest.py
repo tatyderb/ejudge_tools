@@ -103,11 +103,12 @@ class Params:
 
 
 class Data:
-    def __init__(self, config:Params, csv_file:str, delimeter=';'):
+    def __init__(self, config:Params, csv_file:str, delimiter):
         self.cfg = config
 
         # читаем cvs файл
-        runs = Data.get_data(csv_file, delimeter)
+        runs = Data.get_data(csv_file, delimiter)
+        logging.debug((runs))
 
         # учитываем только ОК посылки от логинов, которые содержат номера групп по маске, для всех задач
         # так же подсчитывается количество студентов в группе (по количеству логинов, которые посылали успешно задачи)
@@ -123,8 +124,45 @@ class Data:
         logging.debug(f'real counted prob names {self.headers}')
 
 
+    def data_group(self, group, get_student_numbers=True, add_percentes=False):
+        """
+        возвращает список данных: [количество_студентов_в_группе, количество_ок_задачи1, .. количество_ок_задачиN]
+        где задачи в том порядке, что в self.headers
+        :param group: название (номер) группы
+        :param get_student_numbers: добавлять количество студентов в группе или опустить параметр
+        :param add_percentes: добавить данные по % соотношению решивших данные задачи к общему количеству студентов в группе
+        :return: [количество_студентов_в_группе, количество_ок_задачи1, .. количество_ок_задачиN]
+        """
+        d = [self.data[group].get(prob.fullname, 0) for prob in self.headers]
+        x0 = self.totals[group]
+
+        if add_percentes:
+            d += [int(x * 100 / x0) for x in d]
+        if get_student_numbers:
+            d.insert(0, x0)
+        return d
+
+    def data_group_all(self, get_student_numbers=True, add_percentes=False):
+        """
+        возвращает список данных: [количество_студентов_во_всех группах, количество_ок_задачи1, .. количество_ок_задачиN]
+        где задачи в том порядке, что в self.headers и суммы по всем группам
+        :param get_student_numbers: добавлять количество студентов в группах или опустить параметр
+        :param add_percentes: добавить данные по % соотношению решивших данные задачи к общему количеству студентов в группах
+        :return: [количество_студентов_в_группах, количество_ок_задачи1, .. количество_ок_задачиN]
+        """
+        d = [ sum([gr_data.get(prob.fullname, 0)  for gr_data in self.data.values()]) for prob in self.headers]
+        x0 = sum(self.totals.values())
+
+        if add_percentes:
+            d += [int(x * 100 / x0) for x in d]
+        if get_student_numbers:
+            d.insert(0, x0)
+        return d
+
+
+
     @staticmethod
-    def get_data(file, delimeter=';'):
+    def get_data(file, delimiter=';'):
         """ get scv data from file as list of tuples
         file with data:
         A;B;C
@@ -134,8 +172,10 @@ class Data:
         OrderedDict([('A', '10'), ('B', '20'), ('C', '30')])
         """
         with open(file, encoding="utf8") as fh:
-            rd = csv.DictReader(fh, delimiter=';')
+            rd = csv.DictReader(fh, delimiter=delimiter)
             runs = [dict(row) for row in rd]
+            logging.debug('Read csv data:')
+            logging.debug(runs)
         return runs
 
 
@@ -213,35 +253,22 @@ class Data:
         logging.debug('print_table:')
         logging.debug(d)
         # print header
-        s = '\t'.join( ['', 'student'] + [h.label for h in headers] + [TABLE_SEPARATOR] + [h.label+'%' for h in headers])
+        csv_header = ['group', 'students'] + [h.label for h in headers] + [h.label+'%' for h in headers]
+        s = '\t'.join(csv_header)
         print(s)
-        csv_header = ['group', 'students'] + [h.label for h in headers] + [TABLE_SEPARATOR] + [h.label+'%' for h in headers]
 
         # print rows and calc totals
         logging.debug(d)
         logging.debug([h.fullname for h in headers])
 
-        #for gr in sorted(d.keys()):  # group
         csv_body = []
         for gr in self.cfg.groups:
-            r = '\t'.join([gr, str(group_numbers[gr])] + [str(d[gr].get(prob.fullname, 0)) for prob in headers] +
-                          [TABLE_SEPARATOR] + ['{:3d}'.format(d[gr].get(prob.fullname, 0) * 100 // group_numbers[gr]) for prob in
-                                               headers]
-                          )
-            csv_body.append([gr, str(group_numbers[gr])] + [str(d[gr].get(prob.fullname, 0)) for prob in headers] +
-                          [TABLE_SEPARATOR] + ['{:d}'.format(d[gr].get(prob.fullname, 0) * 100 // group_numbers[gr]) for prob in
-                                               headers])
+            csv_body.append( [gr] + self.data_group(gr, get_student_numbers=True, add_percentes=True))
+            r = '\t'.join(map(str,csv_body[-1]))
             print(r)
-        # print totals:
-        # a = [sum([d[gr][prob] for gr in d.keys()]) for prob in sorted(d.keys())]
-        a = [sum([d[gr].get(prob.fullname, 0) for gr in d.keys()]) for prob in headers]
-        logging.debug(a)
-        logging.debug(group_numbers)
-        total_logins = sum(group_numbers.values())
-        a100 = ['{:3d}'.format(x * 100 // total_logins) for x in a]
-        a100_csv = ['{:d}'.format(x * 100 // total_logins) for x in a]
-        r = '\t'.join(map(str, ['all', total_logins] + a + [TABLE_SEPARATOR] + a100))
-        csv_footer = ['all', total_logins] + a + [TABLE_SEPARATOR] + a100_csv
+
+        csv_footer = ['all'] + self.data_group_all(get_student_numbers=True, add_percentes=True)
+        r = '\t'.join(map(str, csv_footer))
         print(r)
 
         # write to  csv file
@@ -312,6 +339,8 @@ if __name__ == '__main__':
 
     parser.add_argument("--dir", help="output dir for cvs and png files (todo)",
                         default=".")
+    parser.add_argument("--delimiter", help="delimiter in csv file, default ;",
+                        default=";")
 
     args = parser.parse_args()
     
@@ -343,10 +372,9 @@ if __name__ == '__main__':
     logging.info(f'Parameters (finally): {cfg}')    
 
     # разбираем файл данных
-    data = Data(cfg, file)
+    data = Data(cfg, file, args.delimiter)
     data.print_table()
-    #data.dump_csv()
-    
+
     #runs = get_data(file)
     #table, group_numbers = fiter_data(runs, prefix=login_prefix, group_name_len=login_group_len, filter=filter, counted_status='OK')
     # оставляем только те названия задач, что реально существуют и интересны нам
