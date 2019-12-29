@@ -8,7 +8,7 @@ import sys
 """
 Parse dumped runs, get OK statistics: prob_
 Run_Id;Time;Nsec;Time2;Date;Year;Mon;Day;Hour;Min;Sec;Dur;Dur_Day;Dur_Hour;Dur_Min;Dur_Sec;Size;IPV6_Flag;IP;SSL_Flag;Sha1;User_Id;User_Login;User_Name;User_Inv;User_Ban;User_Lock;Prob;Variant;Lang;Content_Type;Stat_Short;Status;Score;Score_Adj;Test;Import_Flag;Hidden_Flag;RO_Flag;Locale_Id;Pages;Judge_Id
-1593;1576160067;253221000;20191212171427;20191212;2019;12;12;17;14;27;10646;0;02;57;26;1076;0;10.55.131.43;0;49563b565fed363984a340b94ab6fdc354c0c202;10089;ed95080609;Григорьевых Илья Дмитриевич   Б04-905;;;;F-DPQE;0;gcc-vg;;PT;Partial solution;4;0;4;1;0;0;0;1;0;0
+1593;1576160067;253221000;20191212171427;20191212;2019;12;12;17;14;27;10646;0;02;57;26;1076;0;10.55.131.43;0;49563b565fed363984a340b94ab6fdc354c0c202;10089;ed95080609;Иванов Иван Иванович   Б04-905;;;;F-DPQE;0;gcc-vg;;PT;Partial solution;4;0;4;1;0;0;0;1;0;0
 """
 
 class ProblemName:
@@ -115,6 +115,7 @@ class Data:
         data, totals = self.fiter_data(runs)
         self.data = data            # {'702': {'A":22, 'C-DPQE':20, 'Cmem-DPQE':18, 'D-DPQE':10}} - сколько успешных решений задач
         self.totals = totals        # сколько человек в каждой группе {'702': 20, '319':17}
+        self.groups = self.cfg.groups    # {'705': 'Иванов', '702':'Петров'}
         logging.debug(f'groups in original order: {self.cfg.groups}')
         logging.debug(f'data: {self.data}')
 
@@ -311,7 +312,6 @@ class Data:
             d[group] = {prob: 0}
         d[group][prob] = d[group].get(prob, 0) + 1
 
-
 if __name__ == '__main__':
 
     logging.basicConfig(
@@ -379,4 +379,3 @@ if __name__ == '__main__':
 
     if not args.text_only:
         print("Plot data")
-
