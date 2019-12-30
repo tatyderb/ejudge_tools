@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import csv
 import json
 import logging
@@ -103,7 +104,14 @@ class Params:
 
 
 class Data:
-    def __init__(self, config:Params, csv_file:str, delimiter):
+    def __init__(self, config:Params, csv_file:str, delimiter, duration=None):
+        """
+        Читаем данные из csv файла данных, фильтруем из них только нужные и их подсчитываем
+        :param config: параметры конфигурации
+        :param csv_file: имя csv файла с данными
+        :param delimiter: разделитель в csv файле
+        :param duration: 'hh:mm' - время, которым мы ограничиваем подсчет ОК посылок, начиная с первой ОК посылки валидного логина (чтобы избежать учета посылок судей и учета дорешивания)
+        """
         self.cfg = config
 
         # читаем cvs файл
@@ -112,7 +120,7 @@ class Data:
 
         # учитываем только ОК посылки от логинов, которые содержат номера групп по маске, для всех задач
         # так же подсчитывается количество студентов в группе (по количеству логинов, которые посылали успешно задачи)
-        data, totals = self.fiter_data(runs)
+        data, totals = self.fiter_data(runs, duration)
         self.data = data            # {'702': {'A":22, 'C-DPQE':20, 'Cmem-DPQE':18, 'D-DPQE':10}} - сколько успешных решений задач
         self.totals = totals        # сколько человек в каждой группе {'702': 20, '319':17}
         self.groups = self.cfg.groups    # {'705': 'Иванов', '702':'Петров'}
@@ -180,7 +188,7 @@ class Data:
         return runs
 
 
-    def fiter_data(self, runs, counted_status='OK'):
+    def fiter_data(self, runs, contest_duration=None, counted_status='OK'):
         """
         Create table:
         login_group \ prob | D- | F- | E- | E_mem- |
@@ -191,21 +199,39 @@ class Data:
         total              | cdt| cft| cet| cememt | сумма по всем группам
         as d['group1']['D-']
         and total[group1] - how many different logins in this group1 with any results for any problems - сколько всего человек в группе, нужно будет для подсчета % справившихся с задачей
-
         """
         d1 = {}         # данные
         total = {}      # для подсчета разных логинов в группе total[group] = [login1, login2, ... loginN]
+        contest_start_timestamp = None   # contest start, datetime
+        contest_end_timestamp = None     # contest end, datetime
         for r in runs:
             login = r['User_Login']
             prob = r['Prob']
             result = r['Stat_Short']
+            timestamp = r['Time']
+
             group = self.extract_group(login)
             if group is None:
+                continue
+            if result != counted_status:
                 continue
             logging.debug(f'filter data (data): {login} {group} {prob} {result}')
             # учитываем очередной логин в группе (будем смотреть сколько в ней разных логинов)
             Data.enroll(total, login, group)
-            if result == counted_status:
+
+            # учитываем, чтобы посылка не прошла после окончания турнира, во время дорешивания, если указана длительность турнира
+            # если длительность не указана, считаем посылки (с правильным логином и группой)
+            if contest_duration is None:
+                Data.count(d1, group, prob)
+                continue
+
+            # первая ОК посылка от правильного логина становится началом отсчета длительности
+            if contest_end_timestamp is None:
+                contest_start_timestamp = int(timestamp)
+                contest_end_timestamp = datetime.datetime.fromtimestamp(contest_start_timestamp) + contest_duration
+                contest_end_timestamp = contest_end_timestamp.timestamp()
+            # учитываются посылки во время турнира (а не до него или при дорешивании)
+            if contest_start_timestamp <= int(timestamp) <= contest_end_timestamp:
                 Data.count(d1, group, prob)
             # logging.debug(f'filter data (total): {total}')
 
@@ -335,6 +361,11 @@ if __name__ == '__main__':
                         default="")
     parser.add_argument("--group_len", help="length of group part in login",
                         default=3, type=int)
+    parser.add_argument("--duration",
+                        help="counted contest duration in hh:mm without after-end solving, \
+                        count from first OK run of filtered login")
+
+
     parser.add_argument("-c", '--config', help="config file name with the options listed above")
 
     parser.add_argument("--dir", help="output dir for cvs and png files (todo)",
@@ -371,10 +402,14 @@ if __name__ == '__main__':
         cfg.login_group_len = args.group_len
     
     logging.info(f'Args: file={file} department={cfg.department} prefix={cfg.login_prefix} group_len={cfg.login_group_len} tasks={cfg.probs}')
-    logging.info(f'Parameters (finally): {cfg}')    
+    logging.info(f'Parameters (finally): {cfg}')
+
+    if args.duration is not None:
+        t = datetime.datetime.strptime(args.duration, '%H:%M')
+        args.duration = datetime.timedelta(hours=t.hour, minutes=t.minute)
 
     # разбираем файл данных
-    data = Data(cfg, file, args.delimiter)
+    data = Data(cfg, file, args.delimiter, args.duration)
     data.print_table()
 
     if not args.text_only:
