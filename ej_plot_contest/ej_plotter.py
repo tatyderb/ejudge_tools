@@ -1,0 +1,3 @@
+
+class DataPlotter(Data):
+    pass
