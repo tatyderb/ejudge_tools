@@ -432,4 +432,4 @@ if __name__ == '__main__':
         data.print_table()
         data.plot_all(args.show)
 
-    print(cfg.output_dir)
+    logging.info(cfg.output_dir)

@@ -1,6 +1,6 @@
 from ej_plot_contest import Data, Params, ProblemName
 
-import matplotlib
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -39,6 +39,7 @@ class DataPlotter(Data):
         department = self.cfg.department    # department='DPQE'
         preps = self.cfg.preps              # preps = {'705': 'Иванов'}
         headers = ['студентов'] + [h.label for h in self.headers] # headers = ['студентов', 'C', 'Cmem', 'D', 'F', 'E', 'Emem']
+        logging.debug(f'plot department {department} for preps {preps} with headers {headers}')
 
         # номера групп в нужной последовательности
         groups = self.groups
@@ -51,25 +52,25 @@ class DataPlotter(Data):
         # столбцы 0, 1, 2, .. до последней задачи, первый столбец - общее кооличество студентов в группе
         xdata = np.arange(len(headers))
 
-        print(xdata)
-        print(ydata)
-        print(groups)
+        logging.debug(xdata)
+        logging.debug(ydata)
+        logging.debug(groups)
 
         width = 0.35  # the width of the bars: can also be len(x) sequence
 
         fig, ax = plt.subplots()
 
-        print('ydata[0]', type(ydata), ydata)
+        logging.debug(f'ydata {ydata}')
 
         y_bottom = np.zeros(len(ydata[0]), dtype=int)
 
         for i in range(ydata.shape[0]):
             gr = groups[i]
-            print(gr, type(gr), preps)
-            print(f'{gr} {preps[gr]}')
+            logging.debug(f'group={gr} preps={preps}')
+            logging.debug(f'{gr} {preps[gr]}')
             p = ax.bar(xdata, ydata[i], width, label=f'{gr} {preps[gr]}', bottom=y_bottom)  # , color=colors[i]
             y_bottom = y_bottom + ydata[i]
-            print('y_bottom', y_bottom)
+            logging.debug(f'y_bottom = {y_bottom}')
 
         # числа сверху столбцов, без первого
         x = xdata[1:]
@@ -100,6 +101,7 @@ class DataPlotter(Data):
         department = self.cfg.department    # department='DPQE'
         headers = ['студентов'] + [h.label for h in self.headers] # headers = ['студентов', 'C', 'Cmem', 'D', 'F', 'E', 'Emem']
         colors = ['lightgray'] + DataPlotter.get_colors(plt.cm.tab10, len(headers)-1)   # gray - for student numbers
+        logging.debug(f'plot GROUP group {group} of {department} department with headers {headers}')
 
         # данные по задачам
         xdata = np.arange(len(headers))
@@ -143,18 +145,19 @@ class DataPlotter(Data):
         # номера групп в нужной последовательности
         groups = list(self.groups)
         department = self.cfg.department    # department='DPQE'
+        logging.debug(f'plot PROBLEM {prob_name} for groups {groups} of {department} department')
 
         fracs = [self.data[g].get(prob_name.fullname, 0) for g in groups]
-        print(fracs)
+        logging.debug(fracs)
         explodes = [0] * len(fracs)
-        print(explodes)
+        logging.debug(explodes)
         pie_colors =  DataPlotter.get_colors(plt.cm.tab10, len(fracs)) + ['lightgray']
 
         file_name = ''
         if show_unsolved:
             file_name = '100'
             total_students = sum(self.totals.values())
-            print(total_students)
+            logging.debug(total_students)
             solved = sum(fracs)
             unsolved = total_students - solved
             fracs.append(unsolved)
