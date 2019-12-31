@@ -87,7 +87,9 @@ class DataPlotter(Data):
 
         if show:
             plt.show()
-        fig.savefig(f'{department}_all.png', format='png')
+        filename = f'{department}_all.png'
+        filename = self.cfg.output_dir.joinpath(filename).resolve()
+        fig.savefig(filename, format='png')
 
     def plot_group(self, group:str, show=True):
         """
@@ -124,7 +126,10 @@ class DataPlotter(Data):
         ax.legend()
         if show:
             plt.show()
-        fig.savefig(f'{department}_{group}.png', format='png')
+
+        filename = f'{department}_{group}.png'
+        filename = self.cfg.output_dir.joinpath(filename).resolve()
+        fig.savefig(filename, format='png')
 
 
     def plot_prob_pie(self, prob_name, show_unsolved=False, show=True):
@@ -171,4 +176,7 @@ class DataPlotter(Data):
 
         if show:
             plt.show()
-        fig.savefig(f'{department}_{prob_name.label}_pie{file_name}.png', format='png')
+
+        filename = f'{department}_{prob_name.label}_pie{file_name}.png'
+        filename = self.cfg.output_dir.joinpath(filename).resolve()
+        fig.savefig(filename, format='png')

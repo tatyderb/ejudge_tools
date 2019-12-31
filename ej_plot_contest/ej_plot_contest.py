@@ -4,6 +4,7 @@ import csv
 import json
 import logging
 import os
+import pathlib
 import sys
 
 
@@ -301,7 +302,8 @@ class Data:
 
         # write to  csv file
         filename = f'{self.cfg.department}_table.csv'
-        with open(filename, 'w', encoding='utf8',  newline='') as csvfile:
+        csv_file = self.cfg.output_dir.joinpath(filename).resolve()
+        with open(csv_file, 'w', encoding='utf8',  newline='') as csvfile:
             csvwriter = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csvwriter.writerow(csv_header)
             csvwriter.writerows(csv_body)
@@ -372,7 +374,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-c", '--config', help="config file name with the options listed above")
 
-    parser.add_argument("--dir", help="output dir for cvs and png files (todo)",
+    parser.add_argument("--dir", help="output dir for cvs and png files",
                         default=".")
     parser.add_argument("--delimiter", help="delimiter in csv file, default ;",
                         default=";")
@@ -395,9 +397,14 @@ if __name__ == '__main__':
     if args.config:
         cfg.read_json(args.config)
     logging.info(f'Read config file: {cfg}')    
-    
+
+    # директория выходных данных, создаем ее
+    cfg.output_dir = pathlib.Path.cwd().joinpath(args.dir)
+    logging.info(f'Output directory is {cfg.output_dir.resolve()}')
+    if not cfg.output_dir.exists():
+        cfg.output_dir.mkdir()
+
     # параметры командной строки приоритетнее конфиг-файла
-    cfg.output_dir = args.dir
     if args.prob_suffix:
         cfg.department = args.prob_suffix
     if args.prob:
@@ -424,3 +431,5 @@ if __name__ == '__main__':
         data = DataPlotter(cfg, file, args.delimiter, args.duration)
         data.print_table()
         data.plot_all(args.show)
+
+    print(cfg.output_dir)
