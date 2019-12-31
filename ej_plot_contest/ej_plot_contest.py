@@ -3,6 +3,7 @@ import datetime
 import csv
 import json
 import logging
+import os
 import sys
 
 
@@ -340,6 +341,9 @@ class Data:
 
 if __name__ == '__main__':
 
+    sys.path.append(os.path.dirname(__file__))
+
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(levelname)s:\t%(message)s'
@@ -373,6 +377,8 @@ if __name__ == '__main__':
     parser.add_argument("--delimiter", help="delimiter in csv file, default ;",
                         default=";")
     parser.add_argument("--text_only", help="prevent prot data, use if no matplotlib",
+                        default=False, action="store_true")
+    parser.add_argument("--show", help="if not text_only, show all plots in interactive view",
                         default=False, action="store_true")
 
     args = parser.parse_args()
@@ -408,9 +414,13 @@ if __name__ == '__main__':
         t = datetime.datetime.strptime(args.duration, '%H:%M')
         args.duration = datetime.timedelta(hours=t.hour, minutes=t.minute)
 
-    # разбираем файл данных
-    data = Data(cfg, file, args.delimiter, args.duration)
-    data.print_table()
 
-    if not args.text_only:
-        print("Plot data")
+    # разбираем файл данных
+    if args.text_only:
+        data = Data(cfg, file, args.delimiter, args.duration)
+        data.print_table()
+    else:
+        from ej_plotter import DataPlotter
+        data = DataPlotter(cfg, file, args.delimiter, args.duration)
+        data.print_table()
+        data.plot_all(args.show)
