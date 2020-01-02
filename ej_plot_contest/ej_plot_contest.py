@@ -106,7 +106,7 @@ class Params:
 
 
 class Data:
-    def __init__(self, config:Params, csv_file:str, delimiter, duration=None):
+    def __init__(self, config:Params, csv_file:str, delimiter=None, duration=None, login_csv_file=None):
         """
         Читаем данные из csv файла данных, фильтруем из них только нужные и их подсчитываем
         :param config: параметры конфигурации
@@ -116,9 +116,12 @@ class Data:
         """
         self.cfg = config
 
+        # результирующий файл для таблицы - имя файла данных с расширением csv в директории результататов
+
         # читаем cvs файл
         runs = Data.get_data(csv_file, delimiter)
         logging.debug((runs))
+        self.logins = Data.get_login_list(login_csv_file, delimiter) if login_csv_file else None
 
         # учитываем только ОК посылки от логинов, которые содержат номера групп по маске, для всех задач
         # так же подсчитывается количество студентов в группе (по количеству логинов, которые посылали успешно задачи)
@@ -171,24 +174,44 @@ class Data:
         return d
 
 
-
     @staticmethod
-    def get_data(file, delimiter=';'):
-        """ get scv data from file as list of tuples
+    def read_csv_file(file, delimiter=None):
+        """
+        Read csv file and return list of OrderedDict
         file with data:
         A;B;C
         1;2;3
         parse as
         OrderedDict([('A', '1'), ('B', '2'), ('C', '3')])
         OrderedDict([('A', '10'), ('B', '20'), ('C', '30')])
-        """
-        with open(file, encoding="utf8") as fh:
-            rd = csv.DictReader(fh, delimiter=delimiter)
-            runs = [dict(row) for row in rd]
-            logging.debug('Read csv data:')
-            logging.debug(runs)
-        return runs
 
+        :param file: filename
+        :param delimiter: None - try to use delimiter , or ; (good delimiter has 1+ columns)
+        :return: list of OrderedDict
+        """
+        if delimiter is None:       # try delimiters ; and ,
+            delimiter = [';', ',']
+        else:
+            delimiter = [delimiter]
+
+        for delim in delimiter:
+            with open(file, encoding="utf8") as fh:
+                rd = csv.DictReader(fh, delimiter=delim)
+                runs = [dict(row) for row in rd]
+                if len(runs[0].keys()) > 1:
+                    logging.debug('Read csv data:')
+                    logging.debug(runs)
+                    return runs
+
+
+    @staticmethod
+    def get_data(file, delimiter=';'):
+        return Data.read_csv_file(file, delimiter)
+
+    @staticmethod
+    def get_login_list(file, delimiter):
+        data = Data.read_csv_file(file, delimiter)
+        return {r['Login']:r['Group'] for r in data}
 
     def fiter_data(self, runs, contest_duration=None, counted_status='OK'):
         """
@@ -211,9 +234,15 @@ class Data:
             prob = r['Prob']
             result = r['Stat_Short']
             timestamp = r['Time']
+            logging.debug(f'raw data (data): {login} ??? {prob} {result} {timestamp}')
 
-            group = self.extract_group(login)
-            if group is None:
+            # номер группы достаем или из логина по маске, или берем из переданного списка логин-группа
+            if self.logins:
+                group = self.logins[login]
+            else:
+                group = r.get('Group', self.extract_group(login))
+
+            if group is None or group == '0':
                 continue
             if result != counted_status:
                 continue
@@ -237,13 +266,21 @@ class Data:
                 Data.count(d1, group, prob)
             # logging.debug(f'filter data (total): {total}')
 
-        logging.debug(f'filter data (total): {total}')
-        # проверить, что в конфиге указали все группы и указали правильно
-        if set(total.keys()) != set(self.cfg.groups):
-            logging.error(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
-            raise ValueError(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
 
-        group_numbers = {group: len(total[group]) for group in sorted(total.keys())}
+        # если есть список студентов, то количество студентов в группе считаем по нему, иначе по факту ОК посылок
+        if self.logins:
+            a = list(self.logins.values())
+            logging.debug(f'ALL LOGINS: -------------------------------\n{a}\n-------------------------------\n')
+            logging.debug(f'groups: {self.cfg.groups}')
+            group_numbers = {group: a.count(group) for group in self.cfg.groups}
+            logging.debug(f'student in groups: {group_numbers}')
+        else:
+            logging.debug(f'filter data (total): {total}')
+            # проверить, что в конфиге указали все группы и указали правильно
+            if set(total.keys()) != set(self.cfg.groups):
+                logging.error(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
+                raise ValueError(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
+            group_numbers = {group: len(total[group]) for group in sorted(total.keys())}
         logging.debug(f'group_numbers={group_numbers}')
         return d1, group_numbers
 
@@ -302,7 +339,8 @@ class Data:
 
         # write to  csv file
         filename = f'{self.cfg.department}_table.csv'
-        csv_file = self.cfg.output_dir.joinpath(filename).resolve()
+        #csv_file = self.cfg.output_dir.joinpath(filename).resolve()
+        csv_file = self.cfg.result_csv_file
         with open(csv_file, 'w', encoding='utf8',  newline='') as csvfile:
             csvwriter = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csvwriter.writerow(csv_header)
@@ -348,7 +386,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(
         level=logging.INFO,
-        format='%(levelname)s:\t%(message)s'
+        format='%(levelname)s:%(lineno)d  \t%(message)s'
         )
 
     parser = argparse.ArgumentParser(
@@ -363,6 +401,8 @@ if __name__ == '__main__':
 
     parser.add_argument("--prob_suffix", help="department name, add to problem names",
                         default="")
+    parser.add_argument("--login_list", help="csv file with fields Login and Group via ",
+                        default=None)
     parser.add_argument("--login_prefix", help="non-group login part",
                         default="")
     parser.add_argument("--group_len", help="length of group part in login",
@@ -376,8 +416,8 @@ if __name__ == '__main__':
 
     parser.add_argument("--dir", help="output dir for cvs and png files",
                         default=".")
-    parser.add_argument("--delimiter", help="delimiter in csv file, default ;",
-                        default=";")
+    parser.add_argument("--delimiter", help="delimiter in csv file, default None (auto, try ; and ,)",
+                        default=None)
     parser.add_argument("--text_only", help="prevent prot data, use if no matplotlib",
                         default=False, action="store_true")
     parser.add_argument("--show", help="if not text_only, show all plots in interactive view",
@@ -404,6 +444,10 @@ if __name__ == '__main__':
     if not cfg.output_dir.exists():
         cfg.output_dir.mkdir()
 
+    result_csv_file = 'res_' + pathlib.Path(file).name
+    cfg.result_csv_file = cfg.output_dir / pathlib.Path(result_csv_file).with_suffix('.csv')
+    #cfg.result_csv_file = cfg.output_dir / pathlib.Path(file).with_suffix('.csv').name
+
     # параметры командной строки приоритетнее конфиг-файла
     if args.prob_suffix:
         cfg.department = args.prob_suffix
@@ -424,11 +468,11 @@ if __name__ == '__main__':
 
     # разбираем файл данных
     if args.text_only:
-        data = Data(cfg, file, args.delimiter, args.duration)
+        data = Data(cfg, file, args.delimiter, args.duration, args.login_list)
         data.print_table()
     else:
         from ej_plotter import DataPlotter
-        data = DataPlotter(cfg, file, args.delimiter, args.duration)
+        data = DataPlotter(cfg, file, args.delimiter, args.duration, args.login_list)
         data.print_table()
         data.plot_all(args.show)
 

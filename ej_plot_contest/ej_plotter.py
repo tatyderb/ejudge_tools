@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 class DataPlotter(Data):
-    def __init__(self, config:Params, csv_file:str, delimiter, duration=None):
-        super().__init__(config, csv_file, delimiter, duration)
+    def __init__(self, config:Params, csv_file:str, delimiter, duration=None, login_list=None):
+        super().__init__(config, csv_file, delimiter, duration, login_list)
 
     @staticmethod
     def get_colors(cmp, n:int):
@@ -28,7 +28,7 @@ class DataPlotter(Data):
            self.plot_group(gr, show)
         for prob in self.headers:
             self.plot_prob_pie(prob, show_unsolved=True, show=show)
-            self.plot_prob_pie(prob, show_unsolved=False, show=show)
+            #self.plot_prob_pie(prob, show_unsolved=False, show=show)
 
 
     def plot_department(self, show=True):
