@@ -1,6 +1,7 @@
 from ej_plot_contest import Data, Params, ProblemName
 
 import logging
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -90,7 +91,7 @@ class DataPlotter(Data):
             plt.show()
         filename = f'{department}_all.png'
         filename = self.cfg.output_dir.joinpath(filename).resolve()
-        fig.savefig(filename, format='png')
+        fig.savefig(filename, format='png', bbox_inches='tight', pad_inches=0)
 
     def plot_group(self, group:str, show=True):
         """
@@ -122,6 +123,7 @@ class DataPlotter(Data):
                         xytext=(0, 1 if x == 0 else 10),  # distance from text to points (x,y)
                         ha='center')  # horizontal alignment can be left, right or center
 
+        ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
         ax.set_xticks(xdata+1)
         ax.set_xticklabels(headers)
         ax.set_title(f'{department} {group} {self.cfg.preps[group]}')
@@ -131,7 +133,7 @@ class DataPlotter(Data):
 
         filename = f'{department}_{group}.png'
         filename = self.cfg.output_dir.joinpath(filename).resolve()
-        fig.savefig(filename, format='png')
+        fig.savefig(filename, format='png', bbox_inches='tight', pad_inches=0)
 
 
     def plot_prob_pie(self, prob_name, show_unsolved=False, show=True):
@@ -182,4 +184,4 @@ class DataPlotter(Data):
 
         filename = f'{department}_{prob_name.label}_pie{file_name}.png'
         filename = self.cfg.output_dir.joinpath(filename).resolve()
-        fig.savefig(filename, format='png')
+        fig.savefig(filename, format='png', bbox_inches='tight', pad_inches=0)
