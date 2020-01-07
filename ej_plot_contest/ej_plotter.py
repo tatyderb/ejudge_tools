@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 class DataPlotter(Data):
-    def __init__(self, config:Params, csv_file:str, delimiter, duration=None, login_list=None):
-        super().__init__(config, csv_file, delimiter, duration, login_list)
+    def __init__(self, config:Params, csv_file:str, delimiter, duration=None, login_list=None, statement_table=False):
+        super().__init__(config, csv_file, delimiter, duration, login_list, statement_table)
 
     @staticmethod
     def get_colors(cmp, n:int):
@@ -123,11 +123,12 @@ class DataPlotter(Data):
                         xytext=(0, 1 if x == 0 else 10),  # distance from text to points (x,y)
                         ha='center')  # horizontal alignment can be left, right or center
 
+        # по оси У только целые числа, ибо студентов пополам не делим
         ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
         ax.set_xticks(xdata+1)
         ax.set_xticklabels(headers)
         ax.set_title(f'{department} {group} {self.cfg.preps[group]}')
-        ax.legend()
+        #ax.legend()
         if show:
             plt.show()
 
@@ -149,7 +150,8 @@ class DataPlotter(Data):
         department = self.cfg.department    # department='DPQE'
         logging.debug(f'plot PROBLEM {prob_name} for groups {groups} of {department} department')
 
-        fracs = [self.data[g].get(prob_name.fullname, 0) for g in groups]
+        #fracs = [self.data[g].get(prob_name.fullname, 0) for g in groups]
+        fracs = self.data_prob(prob_name)
         logging.debug(fracs)
         explodes = [0] * len(fracs)
         logging.debug(explodes)

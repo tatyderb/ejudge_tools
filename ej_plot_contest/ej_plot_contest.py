@@ -74,7 +74,7 @@ class Params:
         self._preps = {}            # group from login : prep last name, or build by csv data without prep names
         self._groups = []           # list of groups in preconstructed order
         self.probs = []             # ProblemName list
-    
+
     
     def __repr__(self):
         return str(self.__dict__)
@@ -106,13 +106,14 @@ class Params:
 
 
 class Data:
-    def __init__(self, config:Params, csv_file:str, delimiter=None, duration=None, login_csv_file=None):
+    def __init__(self, config:Params, csv_file:str, delimiter=None, duration=None, login_csv_file=None, statement_table=False):
         """
         Читаем данные из csv файла данных, фильтруем из них только нужные и их подсчитываем
         :param config: параметры конфигурации
         :param csv_file: имя csv файла с данными
         :param delimiter: разделитель в csv файле
         :param duration: 'hh:mm' - время, которым мы ограничиваем подсчет ОК посылок, начиная с первой ОК посылки валидного логина (чтобы избежать учета посылок судей и учета дорешивания)
+        :param statement_table: True - csv file is statement table instead of runs dump (as usual)
         """
         self.cfg = config
 
@@ -122,15 +123,30 @@ class Data:
         runs = Data.get_data(csv_file, delimiter)
         logging.debug((runs))
         self.logins = Data.get_login_list(login_csv_file, delimiter) if login_csv_file else None
-
-        # учитываем только ОК посылки от логинов, которые содержат номера групп по маске, для всех задач
-        # так же подсчитывается количество студентов в группе (по количеству логинов, которые посылали успешно задачи)
-        data, totals = self.fiter_data(runs, duration)
-        self.data = data            # {'702': {'A":22, 'C-DPQE':20, 'Cmem-DPQE':18, 'D-DPQE':10}} - сколько успешных решений задач
-        self.totals = totals        # сколько человек в каждой группе {'702': 20, '319':17}
         self.groups = self.cfg.groups    # {'705': 'Иванов', '702':'Петров'}
+
+        if statement_table:
+            # это statement table, где задача считается НЕ решеной, если у нее нет или 0 баллов.
+            # Иначе - решена, поэтому ручками вытрите неполные решения, если не хотите их учитыватьd
+            data, totals = self.parse_statement_table(runs)
+        else:
+            # runs dump in csv format with logins list if needed
+
+            # учитываем только ОК посылки от логинов, которые содержат номера групп по маске, для всех задач
+            # так же подсчитывается количество студентов в группе (по количеству логинов, которые посылали успешно задачи)
+            data, totals = self.fiter_data(runs, duration)
+
+        self.data = data            # {'702': {'A":22, 'C-DPQE':20, 'Cmem-DPQE':18, 'D-DPQE':10}} - сколько успешных решений задач
         logging.debug(f'groups in original order: {self.cfg.groups}')
         logging.debug(f'data: {self.data}')
+
+        # количество студентов в группе считаем или по списку логинов, или по посылкам (total)
+        # сколько человек в каждой группе {'702': 20, '319':17}
+        if self.logins is not None:
+            self.totals = self.count_totals_by_login_list()
+        else:
+            self.totals = self.count_totals_by_runs(totals)
+
 
         # оставляем только те названия задач, что реально существуют и интересны нам
         # если фильтр задач в конфигурации указан пустой, то считаем все задачи
@@ -147,7 +163,7 @@ class Data:
         :param add_percentes: добавить данные по % соотношению решивших данные задачи к общему количеству студентов в группе
         :return: [количество_студентов_в_группе, количество_ок_задачи1, .. количество_ок_задачиN]
         """
-        d = [self.data[group].get(prob.fullname, 0) for prob in self.headers]
+        d = [self.data.get(group, {}).get(prob.fullname, 0) for prob in self.headers]
         x0 = self.totals[group]
 
         if add_percentes:
@@ -173,6 +189,13 @@ class Data:
             d.insert(0, x0)
         return d
 
+    def data_prob(self, prob:ProblemName):
+        """
+        Возвращает для задачи prob список [количество_ок_группы1, количество_ок_группы2, .. количество_ок_группыN]
+        :param prob: задача
+        :return:
+        """
+        return [self.data.get(g, {}).get(prob.fullname, 0) for g in self.groups]
 
     @staticmethod
     def read_csv_file(file, delimiter=None):
@@ -213,6 +236,55 @@ class Data:
         data = Data.read_csv_file(file, delimiter)
         return {r['Login']:r['Group'] for r in data}
 
+    def parse_statement_table(self, runs):
+        """
+        Даны runs -  прочитанная statement table в формате csv, из которых нужно сделать
+        total[group1] - how many different logins in this group
+        считаем у сколькоих пользователей из group1 за задачу D- очки >0 в d['group1']['D-']
+
+        :param runs:
+        :return: data, totals
+        """
+        print(runs)
+        d = {}
+        total = {gr:0 for gr in self.groups}
+        for r in runs:
+            group = self.get_group(r)
+            if group not in total:
+                logging.warning(f'group {group} has not been counted')
+                continue
+            total[group] += 1
+            for prob in self.cfg.probs:
+                score = self.get_score(r, prob)
+                # logging.debug(f"score={score} prob={prob} r={r}")
+                if  score > 0:
+                    self.count(d, group, prob.fullname)
+
+        print(d)
+        return d, total
+
+    def get_score(self, r, prob):
+        """
+        При разборе standing table возвращаем очки в виде int (если было пусто, возвращаем 0, если проблемы нет, возвращаем 0)
+        :param r:
+        :param prob:
+        :return:
+        """
+        titles = [prob.label, prob.fullname]
+        for p in titles:
+            score = r.get(p)
+            if score is None:
+                continue
+            try:
+                score = int(score)
+            except ValueError:
+                score = 0
+            if score > 0:
+                return score
+
+        return 0
+
+
     def fiter_data(self, runs, contest_duration=None, counted_status='OK'):
         """
         Create table:
@@ -236,20 +308,18 @@ class Data:
             timestamp = r['Time']
             logging.debug(f'raw data (data): {login} ??? {prob} {result} {timestamp}')
 
-            # номер группы достаем или из логина по маске, или берем из переданного списка логин-группа
-            if self.logins:
-                group = self.logins[login]
-            else:
-                group = r.get('Group', self.extract_group(login))
+            # номер группы достаем или из списка посылок или из списка логин-группа или из логина по маске
+            group = self.get_group(r, login)
 
             if group is None or group == '0':
                 continue
-            if result != counted_status:
-                continue
             logging.debug(f'filter data (data): {login} {group} {prob} {result}')
-            # учитываем очередной логин в группе (будем смотреть сколько в ней разных логинов)
+
+            # учитываем очередной логин в группе (будем смотреть сколько в ней разных логинов), посылки могут быть не ОК
             Data.enroll(total, login, group)
 
+            if result != counted_status:
+                continue
             # учитываем, чтобы посылка не прошла после окончания турнира, во время дорешивания, если указана длительность турнира
             # если длительность не указана, считаем посылки (с правильным логином и группой)
             if contest_duration is None:
@@ -264,25 +334,45 @@ class Data:
             # учитываются посылки во время турнира (а не до него или при дорешивании)
             if contest_start_timestamp <= int(timestamp) <= contest_end_timestamp:
                 Data.count(d1, group, prob)
+            else:
+                logging.warning(f"Out of date: {group} {prob} {timestamp}")
             # logging.debug(f'filter data (total): {total}')
+        return d1, total        # это total по посылкам, его могут потом игнорировать, если считать будем по списку логинов
 
-
-        # если есть список студентов, то количество студентов в группе считаем по нему, иначе по факту ОК посылок
-        if self.logins:
-            a = list(self.logins.values())
-            logging.debug(f'ALL LOGINS: -------------------------------\n{a}\n-------------------------------\n')
-            logging.debug(f'groups: {self.cfg.groups}')
-            group_numbers = {group: a.count(group) for group in self.cfg.groups}
-            logging.debug(f'student in groups: {group_numbers}')
+    def get_group(self, r, login=None):
+        """
+        Достает номер группы или из поля Group записи r, или по логину из списка логинов или по маске из логина
+        :param r: - прочитанная запись из cvs файла
+        :param login: - если уже найден логин для этой записи, передать его (run dump, поле Login, в standing table этого поля нет
+        :return: group
+        """
+        if 'Group' in r.keys():
+            group = r['Group']
+        elif self.logins:
+            group = self.logins[login]
         else:
-            logging.debug(f'filter data (total): {total}')
-            # проверить, что в конфиге указали все группы и указали правильно
-            if set(total.keys()) != set(self.cfg.groups):
-                logging.error(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
-                raise ValueError(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
-            group_numbers = {group: len(total[group]) for group in sorted(total.keys())}
+            group = r.get('Group', self.extract_group(login))
+        return group
+
+    def count_totals_by_login_list(self):
+        """
+        В self.totals делает словарь {номер группы : количество студентов в ней} по списку студентов или учтенным посылкам
+        """
+        a = list(self.logins.values())
+        logging.debug(f'ALL LOGINS: -------------------------------\n{a}\n-------------------------------\n')
+        logging.debug(f'groups: {self.cfg.groups}')
+        return {group: a.count(group) for group in self.cfg.groups}
+
+    def count_totals_by_runs(self, total):
+        # количество студентов в группе считаем по количеству разных логинов в группе
+        logging.debug(f'filter data (total): {total}')
+        # проверить, что в конфиге указали все группы и указали правильно
+        if set(total.keys()) != set(self.cfg.groups):
+            logging.warning(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
+            #raise ValueError(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
+        group_numbers = {group: len(total[group]) for group in sorted(total.keys())}
         logging.debug(f'group_numbers={group_numbers}')
-        return d1, group_numbers
+        return group_numbers
 
     def get_counted_probs(self, data):
         """
@@ -379,6 +469,8 @@ class Data:
             d[group] = {prob: 0}
         d[group][prob] = d[group].get(prob, 0) + 1
 
+
+
 if __name__ == '__main__':
 
     sys.path.append(os.path.dirname(__file__))
@@ -410,6 +502,9 @@ if __name__ == '__main__':
     parser.add_argument("--duration",
                         help="counted contest duration in hh:mm without after-end solving, \
                         count from first OK run of filtered login")
+    parser.add_argument("--statement_table", help="csv file is statement table instead of runs dump",
+                        default=False, action="store_true")
+
 
 
     parser.add_argument("-c", '--config', help="config file name with the options listed above")
@@ -442,7 +537,7 @@ if __name__ == '__main__':
     cfg.output_dir = pathlib.Path.cwd().joinpath(args.dir)
     logging.info(f'Output directory is {cfg.output_dir.resolve()}')
     if not cfg.output_dir.exists():
-        cfg.output_dir.mkdir()
+        cfg.output_dir.mkdir(parents=True)
 
     result_csv_file = 'res_' + pathlib.Path(file).name
     cfg.result_csv_file = cfg.output_dir / pathlib.Path(result_csv_file).with_suffix('.csv')
@@ -468,11 +563,11 @@ if __name__ == '__main__':
 
     # разбираем файл данных
     if args.text_only:
-        data = Data(cfg, file, args.delimiter, args.duration, args.login_list)
+        data = Data(cfg, file, args.delimiter, args.duration, args.login_list, statement_table=args.statement_table)
         data.print_table()
     else:
         from ej_plotter import DataPlotter
-        data = DataPlotter(cfg, file, args.delimiter, args.duration, args.login_list)
+        data = DataPlotter(cfg, file, args.delimiter, args.duration, args.login_list, statement_table=args.statement_table)
         data.print_table()
         data.plot_all(args.show)
 
