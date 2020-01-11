@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 class DataPlotter(Data):
-    def __init__(self, config:Params, csv_file:str, delimiter, duration=None, login_list=None, statement_table=False):
-        super().__init__(config, csv_file, delimiter, duration, login_list, statement_table)
+    def __init__(self, config:Params):
+        super().__init__(config)
 
     @staticmethod
     def get_colors(cmp, n:int):
@@ -92,6 +92,7 @@ class DataPlotter(Data):
         filename = f'{department}_all.png'
         filename = self.cfg.output_dir.joinpath(filename).resolve()
         fig.savefig(filename, format='png', bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
 
     def plot_group(self, group:str, show=True):
         """
@@ -135,6 +136,7 @@ class DataPlotter(Data):
         filename = f'{department}_{group}.png'
         filename = self.cfg.output_dir.joinpath(filename).resolve()
         fig.savefig(filename, format='png', bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
 
 
     def plot_prob_pie(self, prob_name, show_unsolved=False, show=True):
@@ -187,3 +189,4 @@ class DataPlotter(Data):
         filename = f'{department}_{prob_name.label}_pie{file_name}.png'
         filename = self.cfg.output_dir.joinpath(filename).resolve()
         fig.savefig(filename, format='png', bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
