@@ -66,14 +66,21 @@ class Params:
     """
     Сборник всех параметров, которые задаются по умолчанию, в конфиг файле и в аргументах командной строки
     """
-    def __init__(self):
+    def __init__(self, base_dir):
+        self.base_dir = base_dir    # resolve all paths into config relative this directory
+        self.dir = pathlib.Path('.')
         self.output_dir = '.'       # directory for output csv tables and plots
-        self.department = ''
-        self.login_prefix = 'ed'
+        self.file_data = None       # обязательно должно стать именем файла входных данных
+        self.department = ''        # факультет
+        self.stage = None           # test, oct, dec - какая именно контрольная проходит
+        self.login_prefix = 'ed'    # как добыть номер группы из логина: префикс и далее длина части, которая идентификатор группы
         self.login_group_len = 3
+        self.login_list = None      # группа может быть задана списком в csv файле Group;Login
         self._preps = {}            # group from login : prep last name, or build by csv data without prep names
         self._groups = []           # list of groups in preconstructed order
         self.probs = []             # ProblemName list
+        self.duration = None        # contest duration, all OK runs after end would be dropped (дорешивание не учитываем)
+        self.statement_table = False     # файл данных содержит не run dumps (False), а таблицу результатов (True)
 
     
     def __repr__(self):
@@ -95,34 +102,89 @@ class Params:
         self._preps = new_preps
         self._groups = [str(g) for g in new_preps]
 
-    def read_json(self, filename):
-        with open(filename, 'r', encoding='utf8') as read_file:
+    @staticmethod
+    def read_json(self, base_dir, filename):
+        base_dir_path = pathlib.Path(base_dir)
+        filename_path = pathlib.Path(filename)
+        if not filename_path.is_absolute():
+            filename_path = base_dir_path / filename_path
+
+        with open(filename_path, 'r', encoding='utf8') as read_file:
             cfg = json.load(read_file)
-            self.department = cfg.get('department', self.department)
-            self.login_prefix = cfg.get('login_prefix', self.login_prefix)
-            self.login_group_len = cfg.get('login_group_len', self.login_group_len)
-            self.probs = ProblemName.read_names(cfg['problems'], self.department)
-            self.preps = cfg.get('preps', [])
+            return __class__.from_dict(base_dir, cfg)
+
+    @staticmethod
+    def from_dict(base_dir, dictionary):
+        """
+        create Params instace from dictionary, resolve all paths relative the base_dir
+        :param base_dir: resolve all paths relative this directory
+        :param dictionary: dictionary with data
+        :return: Params instance
+        """
+        p = Params(base_dir)
+        for key in dictionary:
+            setattr(p, key, dictionary[key])
+        p.probs = ProblemName.read_names(dictionary['problems'], p.department)
+
+        if p.duration is not None:
+            t = datetime.datetime.strptime(p.duration, '%H:%M')
+            p.duration = datetime.timedelta(hours=t.hour, minutes=t.minute)
+
+        logging.debug(p)
+
+        if 'dir' in dictionary:
+            p.dir = pathlib.Path(dictionary['dir'])
+
+
+        # меняем директорию, относительно которой будет разбирать пути
+        p.base_dir = p.resolve_path(p.dir)
+        # и определяем где лежат входные файлы
+        p.file_data = p.resolve_path(p.file_data)
+        p.login_list = p.resolve_path(p.login_list)
+
+        # результаты конкретного факультета и контрольной - отдельно от данных
+        p.output_dir = p.resolve_path(p.output_dir)
+        logging.info(f'output_dir={p.output_dir} dep={p.department} stage={p.stage}')
+        p.output_dir = p.output_dir / p.department / p.stage
+        # директория выходных данных, создаем ее
+        logging.info(f'Output directory is {p.output_dir.resolve()}')
+        if not p.output_dir.exists():
+            p.output_dir.mkdir(parents=True)
+
+        return p
+
+
+    def resolve_path(self, path):
+        if path is None:
+            return None
+        if not isinstance(path, pathlib.Path):
+            path = pathlib.Path(path)
+        if not path.is_absolute():
+            return self.base_dir / path
+        return path
+
 
 
 class Data:
-    def __init__(self, config:Params, csv_file:str, delimiter=None, duration=None, login_csv_file=None, statement_table=False):
+    def __init__(self, config:Params):
         """
-        Читаем данные из csv файла данных, фильтруем из них только нужные и их подсчитываем
+        Читаем данные из csv файла данных config.file_data, фильтруем из них только нужные и их подсчитываем
         :param config: параметры конфигурации
-        :param csv_file: имя csv файла с данными
-        :param delimiter: разделитель в csv файле
-        :param duration: 'hh:mm' - время, которым мы ограничиваем подсчет ОК посылок, начиная с первой ОК посылки валидного логина (чтобы избежать учета посылок судей и учета дорешивания)
-        :param statement_table: True - csv file is statement table instead of runs dump (as usual)
         """
         self.cfg = config
+
+        # раньше были аргументами, теперь лежат в конфиге
+        csv_file = config.file_data
+        login_csv_file = config.login_list
+        statement_table = config.statement_table
+        duration = config.duration
 
         # результирующий файл для таблицы - имя файла данных с расширением csv в директории результататов
 
         # читаем cvs файл
-        runs = Data.get_data(csv_file, delimiter)
+        runs = Data.get_data(csv_file)
         logging.debug((runs))
-        self.logins = Data.get_login_list(login_csv_file, delimiter) if login_csv_file else None
+        self.logins = Data.get_login_list(login_csv_file) if login_csv_file else None
         self.groups = self.cfg.groups    # {'705': 'Иванов', '702':'Петров'}
 
         if statement_table:
@@ -232,8 +294,8 @@ class Data:
         return Data.read_csv_file(file, delimiter)
 
     @staticmethod
-    def get_login_list(file, delimiter):
-        data = Data.read_csv_file(file, delimiter)
+    def get_login_list(file):
+        data = Data.read_csv_file(file)
         return {r['Login']:r['Group'] for r in data}
 
     def parse_statement_table(self, runs):
@@ -365,11 +427,19 @@ class Data:
 
     def count_totals_by_runs(self, total):
         # количество студентов в группе считаем по количеству разных логинов в группе
+
+        # может случиться (при обработке standing table), что total уже в нужном формате: {группа: количество_студентов}
+        # тогда нужно просто вернуть переданный total
+        if all(map(lambda v : isinstance(v, int), total.values())):
+            return total
+
+        # считаем разные логины
         logging.debug(f'filter data (total): {total}')
         # проверить, что в конфиге указали все группы и указали правильно
         if set(total.keys()) != set(self.cfg.groups):
             logging.warning(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
             #raise ValueError(f'expected groups:{self.cfg.groups} groups from csv={total.keys()}')
+        #print(total)
         group_numbers = {group: len(total[group]) for group in sorted(total.keys())}
         logging.debug(f'group_numbers={group_numbers}')
         return group_numbers
@@ -429,8 +499,7 @@ class Data:
 
         # write to  csv file
         filename = f'{self.cfg.department}_table.csv'
-        #csv_file = self.cfg.output_dir.joinpath(filename).resolve()
-        csv_file = self.cfg.result_csv_file
+        csv_file = self.cfg.output_dir.joinpath(filename).resolve()
         with open(csv_file, 'w', encoding='utf8',  newline='') as csvfile:
             csvwriter = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csvwriter.writerow(csv_header)
@@ -471,10 +540,66 @@ class Data:
 
 
 
+def get_flat_dict(d, department=None, stage=None):
+    """
+    d = {a1: A1, a2:A2, a3: {b1:B1, b2:B2, b3:{c1:C1, c2:C2}} }
+    :param d:
+    :param kwargs:
+    :return:
+    """
+    dres = {}
+    d1 = {}
+    for k in d.keys():
+        if k != 'department':
+            dres[k] = d[k]
+        else:
+            dres['department'] = department
+            d1 = d['department'][department]
+
+    print(dres)
+    print(d1)
+    # сначала обрабатываем все ключи высших уровней, потом перезаписываем их уровнем stage
+    for st in d1:
+        if st != 'stage':
+            dres[st] = d1[st]
+
+    dres['stage'] = stage
+    dres.update(d1['stage'][stage])
+    return dres
+
+def process_data(cfg:Params, show_plots=False):
+    """
+    Обработка данных и вывод результатов
+    :param cfg: конфиг, где указано что брать, как обрабатывать и куда класть результаты
+    :return:
+    """
+    # разбираем файл данных
+    if args.text_only:
+        data = Data(cfg)
+        data.print_table()
+    else:
+        from ej_plotter import DataPlotter
+        data = DataPlotter(cfg)
+        data.print_table()
+        data.plot_all(show_plots)
+
+def process_one_contest(config, config_dir, config_only, show_plots):
+    cfg = Params.from_dict(config_dir, config)
+    if not config_only:
+        process_data(cfg, show_plots)
+    logging.info(cfg.output_dir)
+
+    # а теперь данные, не отфильтрованные по задачам. Чтобы два раза не запускать с фильтрованным и нефильтрованным конфигом.
+    if config['problems']:
+        config['problems'] = ''
+        config['output_dir'] = 'res_unfiltered'
+        cfg = Params.from_dict(config_dir, config)
+        if not config_only:
+            process_data(cfg, show_plots)
+        logging.info(cfg.output_dir)
+
+
 if __name__ == '__main__':
-
-    sys.path.append(os.path.dirname(__file__))
-
 
     logging.basicConfig(
         level=logging.INFO,
@@ -482,93 +607,55 @@ if __name__ == '__main__':
         )
 
     parser = argparse.ArgumentParser(
-        description='Calculate statistics for Ejudge contest stored in csv file', 
-        usage= f'\n\t{sys.argv[0]} --prob "C- C-mem- D- F- E- E_mem-" --prob_suffix=DPQE --login_prefix=ed905  2019decDPQE.csv --dir ../2019/DPQE',
+        description='Calculate statistics for all Ejudge contests described into config json',
+        usage=f'\n\t{sys.argv[0]} cfg_2019.json FRTK dec --text_only',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("FILE", help="file in csv, dumped standings from ejudge")
-    parser.add_argument('-v', "--verbose", help="increase verbosity",
-                        action="store_true")
-    parser.add_argument("--prob", help="list of problem name prefixes without department name via space")
-
-    parser.add_argument("--prob_suffix", help="department name, add to problem names",
-                        default="")
-    parser.add_argument("--login_list", help="csv file with fields Login and Group via ",
-                        default=None)
-    parser.add_argument("--login_prefix", help="non-group login part",
-                        default="")
-    parser.add_argument("--group_len", help="length of group part in login",
-                        default=3, type=int)
-    parser.add_argument("--duration",
-                        help="counted contest duration in hh:mm without after-end solving, \
-                        count from first OK run of filtered login")
-    parser.add_argument("--statement_table", help="csv file is statement table instead of runs dump",
+    parser.add_argument("config", help="config in json format")
+    parser.add_argument("department", help="Department name in config dictionary", default=None, nargs='?')
+    parser.add_argument("stage", help="stage name in config dictionary", default=None, nargs='?')
+    parser.add_argument("--config_only", help="prevent any data processing, only print resulted config, for debug only!",
                         default=False, action="store_true")
-
-
-
-    parser.add_argument("-c", '--config', help="config file name with the options listed above")
-
-    parser.add_argument("--dir", help="output dir for cvs and png files",
-                        default=".")
-    parser.add_argument("--delimiter", help="delimiter in csv file, default None (auto, try ; and ,)",
-                        default=None)
     parser.add_argument("--text_only", help="prevent prot data, use if no matplotlib",
                         default=False, action="store_true")
-    parser.add_argument("--show", help="if not text_only, show all plots in interactive view",
+    parser.add_argument("--show_plots", help="show all plots interactively in addition to saving all images",
                         default=False, action="store_true")
+    parser.add_argument('-v', "--verbose", help="increase verbosity",
+                        action="store_true")
 
     args = parser.parse_args()
-    
-    
-    file = args.FILE
-    
+
     if args.verbose:
         print("verbosity turned on")
         logging.getLogger().level = logging.DEBUG
-    
-    # сначала разбираем конфиг
-    cfg = Params()
-    if args.config:
-        cfg.read_json(args.config)
-    logging.info(f'Read config file: {cfg}')    
 
-    # директория выходных данных, создаем ее
-    cfg.output_dir = pathlib.Path.cwd().joinpath(args.dir)
-    logging.info(f'Output directory is {cfg.output_dir.resolve()}')
-    if not cfg.output_dir.exists():
-        cfg.output_dir.mkdir(parents=True)
+    base_dir = pathlib.Path.cwd()
+    config_path = base_dir / args.config
+    config_dir = config_path.parent
 
-    result_csv_file = 'res_' + pathlib.Path(file).name
-    cfg.result_csv_file = cfg.output_dir / pathlib.Path(result_csv_file).with_suffix('.csv')
-    #cfg.result_csv_file = cfg.output_dir / pathlib.Path(file).with_suffix('.csv').name
+    with open(config_path, 'r', encoding='utf8') as read_file:
+        config = json.load(read_file)
+    json.dump(config, indent=4, fp=sys.stdout)
 
-    # параметры командной строки приоритетнее конфиг-файла
-    if args.prob_suffix:
-        cfg.department = args.prob_suffix
-    if args.prob:
-        cfg.probs = ProblemName.read_names(args.prob, cfg.department)
-    if args.login_prefix:
-        cfg.login_prefix = args.login_prefix
-    if args.group_len:
-        cfg.login_group_len = args.group_len
-    
-    logging.info(f'Args: file={file} department={cfg.department} prefix={cfg.login_prefix} group_len={cfg.login_group_len} tasks={cfg.probs}')
-    logging.info(f'Parameters (finally): {cfg}')
+    # обрабатываем конфиг для одного единственного констеста (конфиг плоский)
+    if isinstance(config.get('department'), str) and isinstance(config.get('stage'), str):
+        logging.info('Не знаю как Земля, но конфиг плоский')
+        process_one_contest(config, config_dir, args.config_only, args.show_plots)
+        sys.exit(0)
 
-    if args.duration is not None:
-        t = datetime.datetime.strptime(args.duration, '%H:%M')
-        args.duration = datetime.timedelta(hours=t.hour, minutes=t.minute)
+    # в конфиге есть уровни вложенности
+    logging.info(f'file={args.config} dep={args.department} stage={args.stage}')
 
+    departments = config['department'].keys() if args.department is None else [args.department]
 
-    # разбираем файл данных
-    if args.text_only:
-        data = Data(cfg, file, args.delimiter, args.duration, args.login_list, statement_table=args.statement_table)
-        data.print_table()
-    else:
-        from ej_plotter import DataPlotter
-        data = DataPlotter(cfg, file, args.delimiter, args.duration, args.login_list, statement_table=args.statement_table)
-        data.print_table()
-        data.plot_all(args.show)
+    for dep in departments:
+        stages = config['department'][dep]['stage'].keys() if args.stage is None else [args.stage]
+        for st in stages:
+            print(dep, st)
+            d = get_flat_dict(config, dep, st)
+            json.dump(d,indent=4, fp=sys.stdout)
+            if d is None:
+                logging.warning(f'Config file has not department {dep} and stage {st}')
+                continue
+            process_one_contest(d, config_dir, args.config_only, args.show_plots)
 
-    logging.info(cfg.output_dir)
