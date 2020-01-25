@@ -368,7 +368,12 @@ class Data:
             prob = r['Prob']
             result = r['Stat_Short']
             timestamp = r['Time']
+            user_invis = r['User_Inv']
             logging.debug(f'raw data (data): {login} ??? {prob} {result} {timestamp}')
+            logging.debug('User_Inv=[{user_invis}]')
+            if user_invis:
+                logging.warning(f'Invisible user {login} ... skipped')
+                continue
 
             # номер группы достаем или из списка посылок или из списка логин-группа или из логина по маске
             group = self.get_group(r, login)
@@ -382,6 +387,12 @@ class Data:
 
             if result != counted_status:
                 continue
+
+            #if user_invis:
+            #    logging.warning(f'Invisible user {login} from {group} with task {prob}')
+            #    continue
+
+
             # учитываем, чтобы посылка не прошла после окончания турнира, во время дорешивания, если указана длительность турнира
             # если длительность не указана, считаем посылки (с правильным логином и группой)
             if contest_duration is None:
@@ -466,7 +477,51 @@ class Data:
 
         return self.cfg.probs
 
-    def print_table(self, percent=False):
+    def print_table(self, percent=False, to_html=True):
+        header, body, footer = self.get_table(percent)
+        Data.table_print(header, body, footer)
+        self.table_csv(header, body, footer)
+        if to_html:
+            self.table_html(header, body, footer)
+
+    def table_html(self,header, body, footer):
+
+        from jinja2 import Environment, FileSystemLoader
+
+        html_template_dir = pathlib.Path(__file__).parent / 'jinja_templates'
+        html_template_file = 'result_table_template.html'
+
+        env = Environment(loader=FileSystemLoader([html_template_dir]))
+        template = env.get_template(html_template_file)
+
+        # разбиваем данные на абсолютные и проценты
+        n = len(self.headers)
+        # делаем кусок html кода с только таблицей абсолютных данных
+        self.table_html_1(template, header[2:n+2], [r[:n+2] for r in body], footer[:n+2])
+        # делаем кусок html кода с только таблицей процентов
+        self.table_html_1(template, header[n+2:], [r[:2]+r[n+2:] for r in body], footer[:2]+footer[n+2:], percent=True)
+
+    def table_html_1(self, template, header, body, footer, percent=False):
+        print(f'header={header}')
+        print(f'body={body}')
+        print(f'footer={footer}')
+
+
+        percent_sign = '%' if percent else ''
+        output_from_parsed_template = template.render(header=header, body=body, footer=footer, percent=percent_sign)
+        print(output_from_parsed_template)
+
+        if percent:
+            filename = f'{self.cfg.department}_{self.cfg.stage}_percent_table.html'
+        else:
+            filename = f'{self.cfg.department}_{self.cfg.stage}_table.html'
+        html_file = self.cfg.output_dir.joinpath(filename).resolve()
+
+        # to save the results
+        with open(html_file, "w", encoding='utf8') as fh:
+            fh.write(output_from_parsed_template)
+
+    def get_table(self, percent=False):
         """
         print d[task][prob] as table with prob - column header, task - row header
         """
@@ -480,23 +535,22 @@ class Data:
         logging.debug(d)
         # print header
         csv_header = ['group', 'students'] + [h.label for h in headers] + [h.label+'%' for h in headers]
-        s = '\t'.join(csv_header)
-        print(s)
 
         # print rows and calc totals
         logging.debug(d)
         logging.debug([h.fullname for h in headers])
 
         csv_body = []
-        for gr in self.cfg.groups:
-            csv_body.append( [gr] + self.data_group(gr, get_student_numbers=True, add_percentes=True))
-            r = '\t'.join(map(str,csv_body[-1]))
-            print(r)
+        for gr, prep in self.cfg.preps.items():
+            csv_body.append( [f'{gr} - {prep}'] + self.data_group(gr, get_student_numbers=True, add_percentes=True))
 
         csv_footer = ['all'] + self.data_group_all(get_student_numbers=True, add_percentes=True)
-        r = '\t'.join(map(str, csv_footer))
-        print(r)
 
+        print(csv_header, csv_body, csv_footer)
+        return (csv_header, csv_body, csv_footer)
+
+
+    def table_csv(self, csv_header, csv_body, csv_footer):
         # write to  csv file
         filename = f'{self.cfg.department}_table.csv'
         csv_file = self.cfg.output_dir.joinpath(filename).resolve()
@@ -506,6 +560,23 @@ class Data:
             csvwriter.writerows(csv_body)
             csvwriter.writerow(csv_footer)
 
+    @staticmethod
+    def table_print(csv_header, csv_body, csv_footer):
+        """
+        Print table in stdout
+        :param csv_header:
+        :param csv_body:
+        :param csv_footer:
+        """
+        s = '\t'.join(csv_header)
+        print(s)
+
+        for r in csv_body:
+            s = '\t'.join(map(str, r))
+            print(s)
+
+        s = '\t'.join(map(str, csv_footer))
+        print(s)
 
     def extract_group(self, login):
         """
@@ -567,7 +638,7 @@ def get_flat_dict(d, department=None, stage=None):
     dres.update(d1['stage'][stage])
     return dres
 
-def process_data(cfg:Params, show_plots=False):
+def process_data(cfg:Params, show_plots=False, to_html=True):
     """
     Обработка данных и вывод результатов
     :param cfg: конфиг, где указано что брать, как обрабатывать и куда класть результаты
@@ -576,11 +647,11 @@ def process_data(cfg:Params, show_plots=False):
     # разбираем файл данных
     if args.text_only:
         data = Data(cfg)
-        data.print_table()
+        data.print_table(to_html)
     else:
         from ej_plotter import DataPlotter
         data = DataPlotter(cfg)
-        data.print_table()
+        data.print_table(to_html)
         data.plot_all(show_plots)
 
 def process_one_contest(config, config_dir, config_only, show_plots):
