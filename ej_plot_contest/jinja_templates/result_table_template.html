@@ -1,0 +1,52 @@
+<div class=page style="overflow-x:auto;">
+
+<!-- https://stackoverflow.com/questions/42847877/jinja2-list-of-dictionaries-into-html-table -->
+<!-- https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tfoot -->
+
+<table>
+    <!-- table header -->
+    <thead>
+        <tr>
+            <th rowspan=2>Группы</th>
+            <th rowspan=2>Студентов</th>
+            <th colspan= {{ header | length }} >Решенных задач {{ percent }}</th>
+        </tr>
+        <tr>
+            {% for key in header %}
+            <th scope="col"> {{ key }} </th>
+            {% endfor %}
+        </tr>
+    </thead>
+    
+    <!-- table rows -->
+    <tbody>
+        {% for row in body %}
+        <tr>
+            <th scope="row"> {{ row[0] }} </th>
+            <td class="total"> {{ row[1] }} </td>
+            {% for data in row[2:] %}
+           <td> 
+            {% if data == 0 %}
+            {% else %}
+                {{ data }} 
+            {% endif %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    
+    <!-- table footer -->
+    {% if footer %}
+    <tfoot>
+        <tr>
+            <th>Всего </th>
+            {% for data in footer[1:] %}
+            <td> {{ data }} </td>
+            {% endfor %}
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+
+</div >
