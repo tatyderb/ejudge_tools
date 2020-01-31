@@ -1,5 +1,7 @@
 {
 "department":"DPQE",
+"stage":"dec",
+"file_data": "2019w_DPQE.csv",
 "login_prefix":"ed950",
 "login_group_len":3,
 "problems":"C- Cmem- D- F- E- E_mem-",

@@ -161,6 +161,8 @@ Run_Id,Time,Nsec,Time2,Date,Year,Mon,Day,Hour,Min,Sec,Dur,Dur_Day,Dur_Hour,Dur_M
 ```cpp
 {
 "department":"DPQE",
+"stage":"dec",
+"file_data": "2019w_DPQE.csv",
 "login_prefix":"ed950",
 "login_group_len":3,
 "problems":"C- Cmem- D- F- E- E_mem-",
@@ -309,16 +311,22 @@ cfg_dir
 
 ### Общая bar chart
 
+![All groups bar chart](example_data/FALT_all.png)
+
 По каждой задаче строится столбец, из подстолбцов групп.
 
 Горизонтальная ось - названия задач, вертикальная ось - количество решений.
 
 ### bar chart по группам
 
+![Bar chart for group 964](example_data/FALT_964.png)
+
 По каждой группе строится диаграмма.
 
 Горизонтальная ось - названия задач, вертикальная ось - количество решений.
 
 ### pie chart по задачам
+
+![Bar chart for group 964](example_data/FALT_C_pie100.png)
 
 Для каждой задачи строятся 2 круговых диаграммы (в разных файлах) - количество решений по группам без сектора не решивших задачу и количество решений по группам с сектором количества студентов, которые не решили задачу (во всех группах сразу).
