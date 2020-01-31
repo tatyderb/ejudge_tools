@@ -1,0 +1,65 @@
+{
+    "output_dir": "res",
+    "department": {
+        "FAKI": {
+            "dir":"FAKI",
+            "stage": {
+                "test": {
+                    "file_data": "2019test_FAKI_cpp_911155.txt",
+                    "problems":"triangle elevator words_freq shop sort spaceship mission",
+                    "login_list": "FAKI_groups_test1.csv"
+                },
+                "oct": {
+                    "duration":"3:30",
+                    "file_data": "2019oct_FAKI_cpp_990112.txt",
+                    "problems":"dumbell race stratrix cylinders goblins rabbitrain rivers icehaulers perforaptor",
+                    "login_prefix": "k1s"
+                },
+                "dec": {
+                    "duration":"3:30",
+                    "file_data": "2019dec_FAKI_cpp_990107.txt",
+                    "problems":"foodforce fitnesscat fedcats catfarm reedcat irbis petnames rendezvous",
+                    "login_prefix": "k2s"
+                }
+            },
+            "login_prefix": "",
+            "login_group_len": 3,
+            "preps": {
+                "934": "Алексеев",
+                "935": "Борисов",
+                "936": "Васюков",
+                "939": "Григорьев",
+                "933": "Дмитриев",
+                "932": "Егоров",
+                "931": "Яковлев"
+            }
+        },
+        "FIVT": {
+            "dir":"FIVT",
+            "stage": {
+                "test": {
+                    "file_data":"2019test_FIVT_905101.txt",
+                    "problems":"",
+                    "login_list":"FIVT_test_groups.txt"
+                },
+                "oct": {
+                    "file_data": "2019oct_FIVT_990010.txt",
+                    "problems": "B AC- AD- AE- AF- AG- AS- AS2- AH-"
+                },
+                "dec": {
+                    "duration":"3:30",
+                    "file_data": "2019dec_FIVT_990011.txt",
+                    "problems": "B C- Cmem- D- E- F- mem- G-"
+                }
+            },
+            "login_prefix": "ed950",
+            "login_group_len": 3,
+            "preps":{
+                "320":"Кузнецов",
+                "804":"Гончаров",
+                "701":"Ткачук",
+                "705":"Мельников"
+            }
+        }
+    }
+}
