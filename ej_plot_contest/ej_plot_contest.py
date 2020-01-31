@@ -82,6 +82,21 @@ class Params:
         self.duration = None        # contest duration, all OK runs after end would be dropped (дорешивание не учитываем)
         self.statement_table = False     # файл данных содержит не run dumps (False), а таблицу результатов (True)
 
+    def verify(self):
+        """
+        Проверяет, что все обязательные поля конфига заданы
+        """
+        def failed(field, wrong):
+            logging.error(f'CONFIG: {field} should be specified, "{wrong}" now')
+            sys.exit(1)
+             
+        if not self.department:
+            failed('department', self.department)
+        if not self.stage:
+            failed('stage', self.stage)
+        if not self.file_data:
+            failed('file_data', self.file_data)
+        
     
     def __repr__(self):
         return str(self.__dict__)
@@ -656,6 +671,7 @@ def process_data(cfg:Params, show_plots=False, to_html=True):
 
 def process_one_contest(config, config_dir, config_only, show_plots):
     cfg = Params.from_dict(config_dir, config)
+    cfg.verify()
     if not config_only:
         process_data(cfg, show_plots)
     logging.info(cfg.output_dir)
