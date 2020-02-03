@@ -1,3 +1,8 @@
+"""
+Рисует круговые диаграммы оценок в каждой школе и сохраняет их в указанной директории.
+python3 plot_semestr_data.py example_data.csv output_dir 'осенний семестр 2019 года'
+"""
+
 import argparse
 import datetime
 import csv
