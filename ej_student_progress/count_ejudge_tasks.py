@@ -4,8 +4,6 @@ import json
 import logging
 import sys
 
-
-
 """
 Parse dumped runs, get OK statistics: prob_
 Run_Id;Time;Nsec;Time2;Date;Year;Mon;Day;Hour;Min;Sec;Dur;Dur_Day;Dur_Hour;Dur_Min;Dur_Sec;Size;IPV6_Flag;IP;SSL_Flag;Sha1;User_Id;User_Login;User_Name;User_Inv;User_Ban;User_Lock;Prob;Variant;Lang;Content_Type;Stat_Short;Status;Score;Score_Adj;Test;Import_Flag;Hidden_Flag;RO_Flag;Locale_Id;Pages;Judge_Id
@@ -81,7 +79,7 @@ def parse_config(cfg_file):
     login_list = [login_format.format(x) for x in range(login_first, login_last+1)]
     return login_list, cfg['tasks']
     
-def update_data(timestamp, runs, login_list, task_list, res_file, olddata_file=None):
+def get_data_from_runs(timestamp, runs, login_list, task_list, res_file, olddata_file=None):
     """ Update data in olddata_file with runs according to login_list and task_list filters
     """
     '''
@@ -122,7 +120,11 @@ def update_data(timestamp, runs, login_list, task_list, res_file, olddata_file=N
         row[-1] = len(d.get(row[0], {}))
         
     print(data)
+    save_result_csv(data, res_file)
     
+def save_result_csv(data, res_file):
+    """ write data in res_file in csv format
+    """
     with open(res_file, 'w', encoding='utf8',  newline='') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         csvwriter.writerows(data)
@@ -130,11 +132,35 @@ def update_data(timestamp, runs, login_list, task_list, res_file, olddata_file=N
     
 if __name__ == '__main__':
     
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(levelname)s:%(lineno)d  \t%(message)s'
+        )
+
+    parser = argparse.ArgumentParser(
+        description='Calculate statistics per login for one Ejudge contests described into config json',
+        usage=f'\n\t{sys.argv[0]} --standings 20200405 20200405_t1.csv 01_int.json now.csv',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument("timestamp", help="Data date as string")
+    parser.add_argument("raw_csv", help="input data in csv format")
+    parser.add_argument("config", help="config in json format")
+    parser.add_argument("res_csv", help="output data in csv format", default='now.csv')
+    parser.add_argument("--standings", help="csv data from stangings table",
+                        default=False, action="store_true")
+    parser.add_argument('-v', "--verbose", help="increase verbosity",
+                        default=False, action="store_true")
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        print("verbosity turned on")
+        logging.getLogger().level = logging.DEBUG    
+    timestamp = args.timestamp
+    cvs_file = args.raw_csv
+    cfg_file = args.config
+    res_file = args.res_csv
     
-    timestamp = sys.argv[1]
-    cvs_file = sys.argv[2]
-    cfg_file = sys.argv[3]
-    res_file = sys.argv[4]
     '''
     olddata_file = sys.argv[4]
     if len(sys.argv) > 4:
@@ -144,5 +170,10 @@ if __name__ == '__main__':
     '''
     login_list, task_list = parse_config(cfg_file)
     runs = get_data(cvs_file)
+    
+    if args.standings:
+        update_data = get_data_from_standing
+    else:
+        update_data = get_data_from_runs
     update_data(timestamp, runs, login_list, task_list, res_file)
     
