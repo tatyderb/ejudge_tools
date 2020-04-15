@@ -1,9 +1,20 @@
 {
-    "login": {
+    "login": [
+    {
+        "login_format":"tut2020{:02d}",
+        "login_first":1,
+        "login_last":10
+    },
+    {
         "login_format":"m2020{:02d}",
         "login_first":1,
         "login_last":89
     },
+    {
+        "login": "ejudge"
+    }
+    
+    ],
     "tasks" : [
         "hello",	
         "float_2",	

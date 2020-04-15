@@ -60,23 +60,33 @@ def fiter_data(runs, task_fiter, login_list, counted_status='OK'):
 def parse_config(cfg_file):
     """ parse config file in json format:
     {
-        logins: {
-            login_format:'m2020%02d',
-            login_first:1,
-            login_last:89
-        },
-        tasks : [
-            hello,	float_2,	float_3,	float_4,	float_5,	float_6,	float_7,	float_11,	float_12,	int_01,	sum_4_obed,	int_2,	int_3,	sum_3
+        "logins": [
+        {
+            "login_format":"m2020%02d",
+            "login_first":1,
+            "login_last":89
+        }, 
+        {
+            "login": "ejudge"
+        }
+        ],
+        "tasks" : [
+            "hello",	"float_2",	"float_3",	"float_4"
         ]
     }
     """
     with open(cfg_file, 'r', encoding='utf8') as read_file:
         cfg = json.load(read_file)
-    
-    login_format = cfg['login']['login_format']
-    login_first = cfg['login']['login_first']
-    login_last = cfg['login']['login_last']
-    login_list = [login_format.format(x) for x in range(login_first, login_last+1)]
+
+    login_list = []
+    for log in cfg['login']:
+        if 'login' in log:
+            login_list += [log['login']]
+        else:
+            login_format = log['login_format']
+            login_first = log['login_first']
+            login_last = log['login_last']
+            login_list += [login_format.format(x) for x in range(login_first, login_last+1)]
     return login_list, cfg['tasks']
     
 def get_data_from_runs(timestamp, runs, login_list, task_list, res_file, olddata_file=None):
@@ -101,12 +111,12 @@ def get_data_from_runs(timestamp, runs, login_list, task_list, res_file, olddata
         prob = r['Prob']
         result = r['Stat_Short']
         if result != 'OK':
-            print('skip result', result)
+            logging.debug(f'skip result {result}')
             continue
         if not prob in task_list:
-            print('skip task', prob)
+            logging.debug(f'skip task {prob}')
             continue
-        print(f'count login={login} task={prob}')
+        logging.debug(f'count login={login} task={prob}')
 
         
         # d[login] = d.get(login, 0) + 1
@@ -119,7 +129,7 @@ def get_data_from_runs(timestamp, runs, login_list, task_list, res_file, olddata
     for row in data[1:]:
         row[-1] = len(d.get(row[0], {}))
         
-    print(data)
+    logging.info(data)
     save_result_csv(data, res_file)
     
 def save_result_csv(data, res_file):
@@ -154,7 +164,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.verbose:
-        print("verbosity turned on")
+        logging.info("verbosity turned on")
         logging.getLogger().level = logging.DEBUG    
     timestamp = args.timestamp
     cvs_file = args.raw_csv
