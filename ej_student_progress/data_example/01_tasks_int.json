@@ -1,0 +1,23 @@
+{
+    "login": {
+        "login_format":"m2020{:02d}",
+        "login_first":1,
+        "login_last":89
+    },
+    "tasks" : [
+        "hello",	
+        "float_2",	
+        "float_3",	
+        "float_4",	
+        "float_5",	
+        "float_6",	
+        "float_7",	
+        "float_11",	
+        "float_12",	
+        "int_01",	
+        "sum_4_obed",	
+        "int_2",	
+        "int_3",	
+        "sum_3"
+    ]
+}
