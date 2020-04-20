@@ -10,7 +10,7 @@ Run_Id;Time;Nsec;Time2;Date;Year;Mon;Day;Hour;Min;Sec;Dur;Dur_Day;Dur_Hour;Dur_M
 1593;1576160067;253221000;20191212171427;20191212;2019;12;12;17;14;27;10646;0;02;57;26;1076;0;10.55.131.43;0;49563b565fed363984a340b94ab6fdc354c0c202;10089;ed95080609;Григорьевых Илья Дмитриевич   Б04-905;;;;F-DPQE;0;gcc-vg;;PT;Partial solution;4;0;4;1;0;0;0;1;0;0
 """
 
-def get_data(file, delimeter=';'):
+def read_runs(file, delimeter=';'):
     """ get scv data from file as list of tuples
     file with data:
     A;B;C
@@ -23,7 +23,7 @@ def get_data(file, delimeter=';'):
         rd = csv.DictReader(fh, delimiter=';')
         runs = [dict(row) for row in rd]
     return runs
-    
+
 def fiter_data(runs, task_fiter, login_list, counted_status='OK'):
     """
     Create table:
@@ -87,9 +87,18 @@ def parse_config(cfg_file):
             login_first = log['login_first']
             login_last = log['login_last']
             login_list += [login_format.format(x) for x in range(login_first, login_last+1)]
-    return login_list, cfg['tasks']
+            
+    task_list = {}
+    DEFAULT_SCORE = 10
+    for t in cfg['tasks']:
+        if isinstance(t, str):
+            task_list[t] = DEFAULT_SCORE
+        else:
+            task_list[t['name']] = t['score']
+    logging.debug(task_list)
+    return login_list, task_list
     
-def get_data_from_runs(timestamp, runs, login_list, task_list, res_file, olddata_file=None):
+def get_data_from_runs(timestamp, runs, login_list, task_list, olddata_file=None):
     """ Update data in olddata_file with runs according to login_list and task_list filters
     """
     '''
@@ -130,7 +139,37 @@ def get_data_from_runs(timestamp, runs, login_list, task_list, res_file, olddata
         row[-1] = len(d.get(row[0], {}))
         
     logging.info(data)
-    save_result_csv(data, res_file)
+    return data
+    
+def get_data_from_standing(timestamp, runs, login_list, task_list, olddata_file=None):
+    """ output:
+    [[login, ok_task_count], ['ejudge', 12]]
+    """   
+    """  Data example:
+    OrderedDict([('login', 'ejudge'), ('hello', '13'), ('float_1', '27')])
+    """
+    data = [['login', timestamp]] 
+    d = { login:0 for login in login_list}
+    for r in runs:
+        logging.debug(r)
+        login = r['User']
+        logging.debug(login)
+        logging.debug(task_list)
+        if not login in login_list:
+            logging.debug(f'skip login {login}')
+            continue
+            
+        for task, score in r.items():
+            if not task in task_list:
+                logging.debug(f'skip {login} {task}')
+            elif score == '\xa0' or int(score) < task_list[task]:
+                logging.debug(f'skip {login} {task} {score}')
+            else:
+                logging.debug(f'COUNT {login} {task} {d[login]}')
+                d[login] += 1    # count this task as ok
+    data += [[login, d[login]] for login in login_list]
+    logging.info(data)
+    return data
     
 def save_result_csv(data, res_file):
     """ write data in res_file in csv format
@@ -179,11 +218,13 @@ if __name__ == '__main__':
         olddata_file = None
     '''
     login_list, task_list = parse_config(cfg_file)
-    runs = get_data(cvs_file)
     
     if args.standings:
         update_data = get_data_from_standing
     else:
         update_data = get_data_from_runs
-    update_data(timestamp, runs, login_list, task_list, res_file)
+    runs = read_runs(cvs_file)
+    res = update_data(timestamp, runs, login_list, task_list)
+    save_result_csv(res, res_file)
+
     

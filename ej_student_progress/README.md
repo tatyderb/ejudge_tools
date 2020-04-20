@@ -28,6 +28,30 @@ python3 ./count_ejudge_tasks.py 20200405 20200405_t1.csv 01_int.json now.csv
 
 ## Формат файла конфигурации
 
+* Список логинов задан в поле `login` списком из следующих словарей:
+    * в поле `login`
+    * списком по формату `login_format` от `login_first` до `login_last` включительно
+* Список задач в виде их short_name (текст) в поле `tasks` 
+
+```cpp
+{
+    "login": [
+    {
+        "login_format":"tut2020{:02d}",
+        "login_first":1,
+        "login_last":10
+    },
+    {
+        "login": "ejudge"
+    }
+    
+    ],
+    "tasks" : [
+"func_1", "func_2", "func_3", "func_4", "func_len", "func_geron", "func_time2min", "func_min2time", "int_clock", "int_hm_plus", "int_hm_d", "deliteli"
+    ]
+}
+```
+
 
 
 

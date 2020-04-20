@@ -17,7 +17,7 @@
     ],
     "tasks" : [
         "hello",	
-        "float_2",	
+        {"name":"float_2", "score": 25},
         "float_3",	
         "float_4",	
         "float_5",	
@@ -29,6 +29,6 @@
         "sum_4_obed",	
         "int_2",	
         "int_3",	
-        "sum_3"
+        {"name":"sum_3", "score": 30}
     ]
 }

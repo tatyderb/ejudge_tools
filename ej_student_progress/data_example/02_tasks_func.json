@@ -1,9 +1,20 @@
 {
-    "login": {
+    "login": [
+    {
+        "login_format":"tut2020{:02d}",
+        "login_first":1,
+        "login_last":10
+    },
+    {
         "login_format":"m2020{:02d}",
         "login_first":1,
         "login_last":89
     },
+    {
+        "login": "ejudge"
+    }
+    
+    ],
     "tasks" : [
 "func_1", "func_2", "func_3", "func_4", "func_len", "func_geron", "func_time2min", "func_min2time", "int_clock", "int_hm_plus", "int_hm_d", "deliteli"
     ]
